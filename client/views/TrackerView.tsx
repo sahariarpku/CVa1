@@ -2,12 +2,16 @@
 import React, { useState, useEffect } from 'react';
 import { View } from '../types';
 import { db, auth, storage } from '../src/lib/firebase';
-import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc, addDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import JobDetailsDrawer from '../components/JobDetailsDrawer';
 
 const TrackerView: React.FC<{ navigate: (view: View) => void }> = ({ navigate }) => {
   const [applications, setApplications] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+
+  const selectedJob = applications.find(app => app.id === selectedJobId);
 
   useEffect(() => {
     if (!auth.currentUser) {
@@ -93,6 +97,55 @@ const TrackerView: React.FC<{ navigate: (view: View) => void }> = ({ navigate })
     }
   };
 
+  const handleExportCSV = () => {
+    if (applications.length === 0) return alert("No data to export.");
+
+    const headers = ["Title", "Employer", "Status", "Date Applied", "Wait Time (Days)", "Link", "Files"];
+    const csvRows = [headers.join(",")];
+
+    applications.forEach(app => {
+      const row = [
+        `"${app.title || ''}"`,
+        `"${app.employer || ''}"`,
+        `"${app.status || ''}"`,
+        `"${app.created_at ? new Date(app.created_at).toLocaleDateString() : ''}"`,
+        `"${Math.floor((Date.now() - new Date(app.created_at || Date.now()).getTime()) / (1000 * 60 * 60 * 24))}"`,
+        `"${app.link || ''}"`,
+        `"${(app.documents?.length || 0) + (app.cvUrl ? 1 : 0)} Files"`
+      ];
+      csvRows.push(row.join(","));
+    });
+
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "applications_export.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const handleAddApplication = async () => {
+    if (!auth.currentUser) return;
+    try {
+      const docRef = await addDoc(collection(db, "applications"), {
+        userId: auth.currentUser.uid,
+        title: "Untitled Application",
+        employer: "",
+        status: "Saved",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        notes: ""
+      });
+      // Open drawer immediately
+      setSelectedJobId(docRef.id);
+    } catch (e) {
+      console.error("Error creating job:", e);
+      alert("Failed to create new application.");
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full bg-[#0f1115] overflow-y-auto">
 
@@ -104,12 +157,9 @@ const TrackerView: React.FC<{ navigate: (view: View) => void }> = ({ navigate })
               <p className="text-slate-500 dark:text-slate-400 text-sm">Organize and optimize your academic journey with AI-driven insights.</p>
             </div>
             <div className="flex gap-2">
-              <button className="h-10 px-4 flex items-center gap-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-sm font-bold">
+              <button onClick={handleExportCSV} className="h-10 px-4 flex items-center gap-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-sm font-bold transition-colors">
+                <span className="material-symbols-outlined text-sm">download</span>
                 Export CSV
-              </button>
-              <button className="h-10 px-4 flex items-center gap-2 bg-primary text-white rounded-lg text-sm font-bold shadow-lg shadow-primary/20">
-                <span className="material-symbols-outlined text-sm">add</span>
-                New Application
               </button>
             </div>
           </div>
@@ -136,8 +186,7 @@ const TrackerView: React.FC<{ navigate: (view: View) => void }> = ({ navigate })
                     <th className="px-6 py-4">Status</th>
                     <th className="px-6 py-4">Date Applied</th>
                     <th className="px-6 py-4 text-center">Link</th>
-                    <th className="px-6 py-4 text-center">CV</th>
-                    <th className="px-6 py-4 text-center">Cover Letter</th>
+                    <th className="px-6 py-4 text-center">Files</th>
                     <th className="px-6 py-4 text-center">Actions</th>
                   </tr>
                 </thead>
@@ -149,8 +198,13 @@ const TrackerView: React.FC<{ navigate: (view: View) => void }> = ({ navigate })
                   ) : (
                     applications.map((row) => {
                       const jobDetails = { ...(row.raw_data || {}), ...row };
+
                       return (
-                        <tr key={row.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <tr
+                          key={row.id}
+                          onClick={() => setSelectedJobId(row.id)}
+                          className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 cursor-pointer group transition-colors"
+                        >
                           <td className="px-6 py-5">
                             <div className="flex flex-col">
                               <span className="font-bold text-slate-900 dark:text-white">{jobDetails.title}</span>
@@ -184,43 +238,17 @@ const TrackerView: React.FC<{ navigate: (view: View) => void }> = ({ navigate })
                             )}
                           </td>
                           <td className="px-6 py-5 text-center">
-                            {jobDetails.cvUrl ? (
-                              <div className="flex items-center justify-center gap-2">
-                                <a
-                                  href={jobDetails.cvUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="flex items-center justify-center gap-1 text-xs font-bold text-primary hover:underline"
-                                  title={jobDetails.cvName || "View CV"}
-                                >
-                                  <span className="material-symbols-outlined text-sm">visibility</span>
-                                  View
-                                </a>
-                                <button
-                                  onClick={() => deleteCV(row.id, jobDetails.cvUrl)}
-                                  className="text-red-500 hover:text-red-700"
-                                  title="Delete CV"
-                                >
-                                  <span className="material-symbols-outlined text-sm">close</span>
-                                </button>
-                              </div>
+                            {((jobDetails.documents?.length || 0) + (jobDetails.cvUrl ? 1 : 0)) > 0 ? (
+                              <button className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-bold">
+                                <span className="material-symbols-outlined text-sm">folder</span>
+                                {(jobDetails.documents?.length || 0) + (jobDetails.cvUrl ? 1 : 0)} Files
+                              </button>
                             ) : (
-                              <label className="cursor-pointer inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors">
-                                <span className="material-symbols-outlined text-sm text-slate-500">upload</span>
-                                <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Upload</span>
-                                <input
-                                  type="file"
-                                  accept="application/pdf"
-                                  className="hidden"
-                                  onChange={(e) => handleFileUpload(e, row.id)}
-                                />
-                              </label>
+                              <button className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-lg text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                                <span className="material-symbols-outlined text-sm">upload</span>
+                                Upload
+                              </button>
                             )}
-                          </td>
-                          <td className="px-6 py-5 text-center">
-                            <button className="size-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 inline-flex items-center justify-center">
-                              <span className="material-symbols-outlined">upload_file</span>
-                            </button>
                           </td>
                           <td className="px-6 py-5 text-center">
                             <button
@@ -237,6 +265,19 @@ const TrackerView: React.FC<{ navigate: (view: View) => void }> = ({ navigate })
                 </tbody>
               </table>
             </div>
+
+
+            {/* New Application Button (Notion style) */}
+            <div className="border-t border-slate-200 dark:border-slate-800 p-2">
+              <button
+                onClick={handleAddApplication}
+                className="w-full flex items-center gap-2 p-2 rounded-lg text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors text-sm font-bold"
+              >
+                <span className="material-symbols-outlined text-[20px]">add</span>
+                New
+              </button>
+            </div>
+
             <div className="mt-auto border-t border-slate-200 dark:border-slate-800 p-4 flex items-center justify-between bg-slate-50 dark:bg-[#1c2638]">
               <div className="flex gap-4">
                 <div className="flex items-center gap-2">
@@ -249,10 +290,16 @@ const TrackerView: React.FC<{ navigate: (view: View) => void }> = ({ navigate })
                 <span className="material-symbols-outlined text-primary text-lg !fill-1">verified</span>
               </div>
             </div>
-          </div>
-        </section>
-      </main>
-    </div>
+          </div >
+        </section >
+      </main >
+
+      <JobDetailsDrawer
+        isOpen={!!selectedJobId}
+        onClose={() => setSelectedJobId(null)}
+        job={selectedJob}
+      />
+    </div >
   );
 };
 

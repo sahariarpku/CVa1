@@ -7,6 +7,7 @@ import { collection, addDoc } from 'firebase/firestore';
 import { cvService } from '../services/cvService';
 import { matchingService } from '../services/matchingService';
 import { aiService } from '../services/aiService';
+import { settingsService } from '../services/settingsService';
 
 interface DiscoverViewProps {
   navigate: (view: View) => void;
@@ -34,8 +35,18 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ navigate }) => {
           userProfile = await cvService.getProfile(auth.currentUser.uid);
         }
 
-        // 2. Get Jobs
-        const res = await fetch('/api/jobs/search?q=research');
+        // 2. Get Settings & Jobs
+        // Fetch Settings for Keywords
+        let query = 'research';
+        if (auth.currentUser) {
+          const settings = await settingsService.getSettings(auth.currentUser.uid);
+          if (settings?.jobPreferences?.keywords) {
+            query = settings.jobPreferences.keywords;
+          }
+        }
+
+        console.log("DiscoverView: Searching for", query);
+        const res = await fetch(`/api/jobs/search?q=${encodeURIComponent(query)}`);
         if (!res.ok) throw new Error('Failed to fetch jobs');
         const data = await res.json();
         let fetchedJobs: Job[] = data.jobs || [];
