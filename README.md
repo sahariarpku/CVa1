@@ -21,3 +21,4 @@ A comprehensive application for managing academic job applications and tailoring
 2.  Run `npm install` in the root directory.
 3.  Run `npm run dev` to start both client and server.
 4.  Open `http://localhost:3001` (or 3000).
+# CVa1
