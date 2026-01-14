@@ -1,0 +1,7 @@
+{
+  "name": "AcademiaAI",
+  "description": "An AI-powered academic career platform for managing CVs, job searching with swipe mechanics, and tracking applications with Gemini-driven insights.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
