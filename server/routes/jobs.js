@@ -1,61 +1,104 @@
 const express = require('express');
 const router = express.Router();
-const axios = require('axios');
-const cheerio = require('cheerio');
+const chromium = require('@sparticuz/chromium');
+const puppeteer = require('puppeteer-core');
 const { db } = require('../utils/firebaseAdmin');
 
-// SEARCH jobs from jobs.ac.uk (Basic Scraper)
+// Conditional local puppeteer for development
+let localPuppeteer;
+try {
+    localPuppeteer = require('puppeteer');
+} catch (e) {
+    console.log("Local puppeteer not available (expected in production)");
+}
+
+// SEARCH jobs from jobs.ac.uk (Puppeteer Scraper)
 router.get('/search', async (req, res) => {
-    console.log("Job Search Route Hit [V2]");
+    console.log("Job Search Route Hit [V3 - Puppeteer]");
     const { q } = req.query;
     const keyword = q || 'research';
     const url = `https://www.jobs.ac.uk/search/?keywords=${encodeURIComponent(keyword)}`;
 
+    let browser = null;
+
     try {
-        const { data } = await axios.get(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Referer': 'https://www.jobs.ac.uk/',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'same-origin',
-                'Sec-Fetch-User': '?1'
+        console.log("Launching browser...");
+
+        // Launch logic: Vercel vs Local
+        if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_VERSION) {
+            browser = await puppeteer.launch({
+                args: chromium.args,
+                defaultViewport: chromium.defaultViewport,
+                executablePath: await chromium.executablePath(),
+                headless: chromium.headless,
+                ignoreHTTPSErrors: true,
+            });
+        } else {
+            // Local development fallback
+            if (localPuppeteer) {
+                browser = await localPuppeteer.launch({
+                    headless: "new",
+                    args: ['--no-sandbox', '--disable-setuid-sandbox']
+                });
+            } else {
+                throw new Error("Local puppeteer not installed. Run 'npm install --save-dev puppeteer'");
             }
-        });
+        }
 
-        const $ = cheerio.load(data);
+        const page = await browser.newPage();
 
-        const jobs = [];
+        // Mimic Real Browser
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-        $('.j-search-result__result').each((i, el) => {
-            const titleEl = $(el).find('.j-search-result__text a').first();
-            const title = titleEl.text().trim();
-            const relativeLink = titleEl.attr('href');
-            const link = relativeLink ? `https://www.jobs.ac.uk${relativeLink}` : '';
+        console.log(`Navigating to ${url}...`);
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-            const employer = $(el).find('.j-search-result__employer').text().trim();
-            const location = $(el).find('.j-search-result__department').text().trim();
+        // Scrape Data from DOM
+        const jobs = await page.evaluate(() => {
+            const results = [];
+            const items = document.querySelectorAll('.j-search-result__result');
 
-            let salary = $(el).find('.j-search-result__info').text().replace(/Salary:\s*/i, '').trim();
-            salary = salary.replace(/\s+/g, ' ');
+            items.forEach((el, i) => {
+                const titleEl = el.querySelector('.j-search-result__text a');
+                if (!titleEl) return;
 
-            const closingDate = $(el).find('.j-search-result__date--blue').text().trim();
+                const title = titleEl.textContent.trim();
+                const relativeLink = titleEl.getAttribute('href');
+                const link = relativeLink ? `https://www.jobs.ac.uk${relativeLink}` : '';
 
-            // Extract ID
-            const id = $(el).data('advert-id') || (relativeLink ? relativeLink.split('/')[2] : `job-${i}`);
+                const employerEl = el.querySelector('.j-search-result__employer');
+                const employer = employerEl ? employerEl.textContent.trim() : '';
 
-            // Logo
-            const logoRel = $(el).find('.j-search-result__small-logo img').attr('src');
-            const logo = logoRel ? (logoRel.startsWith('http') ? logoRel : `https://www.jobs.ac.uk${logoRel}`) : null;
+                const locationEl = el.querySelector('.j-search-result__department');
+                const location = locationEl ? locationEl.textContent.trim() : '';
 
-            if (title) {
-                jobs.push({
-                    id: id.toString(),
+                let salary = 'Competitive';
+                const infoEl = el.querySelector('.j-search-result__info');
+                if (infoEl) {
+                    const text = infoEl.textContent;
+                    const salaryMatch = text.match(/Salary:\s*(.+)/i);
+                    if (salaryMatch) {
+                        salary = salaryMatch[1].trim().replace(/\s+/g, ' ');
+                    }
+                }
+
+                const dateEl = el.querySelector('.j-search-result__date--blue');
+                const closingDate = dateEl ? dateEl.textContent.trim() : '';
+
+                // Extract ID
+                const datasetId = el.getAttribute('data-advert-id');
+                const id = datasetId || (relativeLink ? relativeLink.split('/')[2] : `job-${i}`);
+
+                // Logo
+                const logoImg = el.querySelector('.j-search-result__small-logo img');
+                let logo = null;
+                if (logoImg) {
+                    const src = logoImg.getAttribute('src');
+                    logo = src ? (src.startsWith('http') ? src : `https://www.jobs.ac.uk${src}`) : null;
+                }
+
+                results.push({
+                    id: id ? id.toString() : `job-${i}`,
                     title,
                     employer,
                     location,
@@ -66,22 +109,20 @@ router.get('/search', async (req, res) => {
                     source: 'jobs.ac.uk',
                     matchScore: Math.floor(Math.random() * 15) + 85
                 });
-            }
+            });
+            return results;
         });
 
-        console.log(`Scraped ${jobs.length} jobs for query: ${keyword}`);
+        console.log(`Scraped ${jobs.length} jobs via Puppeteer`);
         res.json({ jobs });
+
     } catch (error) {
-        console.error('Scraping error:', error.message);
-        if (error.response) {
-            console.error('Upstream Status:', error.response.status);
-            console.error('Upstream Data:', error.response.data);
-            return res.status(error.response.status).json({
-                error: `Upstream error: ${error.response.status}`,
-                details: error.message
-            });
-        }
+        console.error('Puppeteer Scraping Error:', error);
         res.status(500).json({ error: 'Failed to fetch jobs', details: error.message });
+    } finally {
+        if (browser) {
+            await browser.close();
+        }
     }
 });
 

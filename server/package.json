@@ -13,6 +13,7 @@
     "dependencies": {
         "@anthropic-ai/sdk": "^0.71.2",
         "@google/generative-ai": "^0.24.1",
+        "@sparticuz/chromium": "^143.0.4",
         "@supabase/supabase-js": "^2.90.1",
         "axios": "^1.13.2",
         "cheerio": "^1.1.2",
@@ -23,9 +24,11 @@
         "groq-sdk": "^0.37.0",
         "multer": "^2.0.2",
         "openai": "^6.16.0",
-        "pdf-parse": "^2.4.5"
+        "pdf-parse": "^2.4.5",
+        "puppeteer-core": "^24.35.0"
     },
     "devDependencies": {
-        "nodemon": "^3.1.11"
+        "nodemon": "^3.1.11",
+        "puppeteer": "^24.35.0"
     }
 }
