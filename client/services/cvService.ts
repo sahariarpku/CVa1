@@ -5,7 +5,9 @@ import { CVProfile } from '../types';
 
 import { aiService } from './aiService';
 
-const API_BASE = '/api/cv';
+const HOST = import.meta.env.VITE_API_HOST;
+const BASE_URL = HOST ? `https://${HOST}` : '';
+const API_BASE = `${BASE_URL}/api/cv`;
 
 export const cvService = {
     // GET Profile (Firestore)

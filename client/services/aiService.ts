@@ -66,7 +66,9 @@ export const aiService = {
 
         console.log("[AIService] Calling completion with config:", config);
 
-        const res = await fetch('/api/ai/completion', {
+        const HOST = import.meta.env.VITE_API_HOST;
+        const BASE_URL = HOST ? `https://${HOST}` : '';
+        const res = await fetch(`${BASE_URL}/api/ai/completion`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

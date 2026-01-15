@@ -46,7 +46,9 @@ const DiscoverView: React.FC<DiscoverViewProps> = ({ navigate }) => {
         }
 
         console.log("DiscoverView: Searching for", query);
-        const res = await fetch(`/api/jobs/search?q=${encodeURIComponent(query)}`);
+        const HOST = import.meta.env.VITE_API_HOST;
+        const BASE_URL = HOST ? `https://${HOST}` : '';
+        const res = await fetch(`${BASE_URL}/api/jobs/search?q=${encodeURIComponent(query)}`);
         if (!res.ok) throw new Error('Failed to fetch jobs');
         const data = await res.json();
         let fetchedJobs: Job[] = data.jobs || [];
