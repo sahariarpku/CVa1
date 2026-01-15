@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const chromium = require('@sparticuz/chromium');
+const chromium = require('@sparticuz/chromium-min');
 const puppeteer = require('puppeteer-core');
 const { db } = require('../utils/firebaseAdmin');
 
@@ -27,9 +27,11 @@ router.get('/search', async (req, res) => {
         // Launch logic: Vercel vs Local
         if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_VERSION) {
             browser = await puppeteer.launch({
-                args: chromium.args,
+                args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
                 defaultViewport: chromium.defaultViewport,
-                executablePath: await chromium.executablePath(),
+                executablePath: await chromium.executablePath(
+                    `https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar`
+                ),
                 headless: chromium.headless,
                 ignoreHTTPSErrors: true,
             });

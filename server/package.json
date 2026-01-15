@@ -13,7 +13,7 @@
     "dependencies": {
         "@anthropic-ai/sdk": "^0.71.2",
         "@google/generative-ai": "^0.24.1",
-        "@sparticuz/chromium": "^143.0.4",
+        "@sparticuz/chromium-min": "^143.0.4",
         "@supabase/supabase-js": "^2.90.1",
         "axios": "^1.13.2",
         "cheerio": "^1.1.2",
