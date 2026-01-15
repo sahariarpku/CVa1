@@ -3,7 +3,7 @@ services:
   - type: web
     name: academiaai-backend
     env: docker
-    context: server
+    rootDir: server
     dockerfilePath: ./Dockerfile
     envVars:
       - key: PORT
