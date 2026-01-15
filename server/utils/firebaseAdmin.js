@@ -11,19 +11,26 @@ const serviceAccount = {
 // Check if already initialized
 try {
     if (!admin.apps.length) {
-        // REQUIRED: You must allow this to fail gracefully if no credentials are present
-        // For now, we'll try applicationDefault() which works if GOOGLE_APPLICATION_CREDENTIALS is set
-        // OR we can leave it uninitialized if we want to mock it.
+        let credential;
 
-        // Since we don't have the private key, passing the partial serviceAccount to cert() was causing a crash.
-        // Let's try to use applicationDefault() first, and if that fails, we fallback to a mock.
+        // Option 1: Env Var contains the JSON string (Best for Render/Vercel)
+        if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+            const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+            credential = admin.credential.cert(serviceAccount);
+        }
+        // Option 2: GOOGLE_APPLICATION_CREDENTIALS file path
+        else {
+            credential = admin.credential.applicationDefault();
+        }
+
         admin.initializeApp({
-            credential: admin.credential.applicationDefault(),
+            credential,
             projectId: "cv-ai-7050e"
         });
+        console.log("Firebase Admin initialized successfully");
     }
 } catch (error) {
-    console.warn("Firebase Admin failed to initialize:", error.message);
+    console.warn("Firebase Admin warning:", error.message);
     console.warn("Database features will not work until credentials are set up.");
 }
 
