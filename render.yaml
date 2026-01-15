@@ -1,0 +1,28 @@
+services:
+  # Backend API Service (Docker)
+  - type: web
+    name: academiaai-backend
+    env: docker
+    context: server
+    dockerfilePath: ./Dockerfile
+    plan: free
+    envVars:
+      - key: PORT
+        value: 5001
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        sync: false # User must add this file/content manually if using service account file
+    autoDeploy: true
+
+  # Frontend Static Site
+  - type: web
+    name: academiaai-frontend
+    env: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./client/dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: academiaai-backend
+          property: url
+    autoDeploy: true

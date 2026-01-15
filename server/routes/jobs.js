@@ -1,20 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const chromium = require('@sparticuz/chromium-min');
-const puppeteer = require('puppeteer-core');
+const chromium = require('puppeteer'); // Use standard puppeteer
+const puppeteer = require('puppeteer');
 const { db } = require('../utils/firebaseAdmin');
-
-// Conditional local puppeteer for development
-let localPuppeteer;
-try {
-    localPuppeteer = require('puppeteer');
-} catch (e) {
-    console.log("Local puppeteer not available (expected in production)");
-}
 
 // SEARCH jobs from jobs.ac.uk (Puppeteer Scraper)
 router.get('/search', async (req, res) => {
-    console.log("Job Search Route Hit [V3 - Puppeteer]");
+    console.log("Job Search Route Hit [V3 - Puppeteer Docker]");
     const { q } = req.query;
     const keyword = q || 'research';
     const url = `https://www.jobs.ac.uk/search/?keywords=${encodeURIComponent(keyword)}`;
@@ -24,28 +16,16 @@ router.get('/search', async (req, res) => {
     try {
         console.log("Launching browser...");
 
-        // Launch logic: Vercel vs Local
-        if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_VERSION) {
-            browser = await puppeteer.launch({
-                args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
-                defaultViewport: chromium.defaultViewport,
-                executablePath: await chromium.executablePath(
-                    `https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar`
-                ),
-                headless: chromium.headless,
-                ignoreHTTPSErrors: true,
-            });
-        } else {
-            // Local development fallback
-            if (localPuppeteer) {
-                browser = await localPuppeteer.launch({
-                    headless: "new",
-                    args: ['--no-sandbox', '--disable-setuid-sandbox']
-                });
-            } else {
-                throw new Error("Local puppeteer not installed. Run 'npm install --save-dev puppeteer'");
-            }
-        }
+        // Launch standard Puppeteer (Docker/Local)
+        browser = await puppeteer.launch({
+            headless: "new",
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage', // Required for Docker
+                '--disable-gpu'
+            ]
+        });
 
         const page = await browser.newPage();
 
