@@ -5,20 +5,20 @@ services:
     env: docker
     context: server
     dockerfilePath: ./Dockerfile
-    plan: free
     envVars:
       - key: PORT
-        value: 5001
+        value: "5001"
       - key: GOOGLE_APPLICATION_CREDENTIALS
-        sync: false # User must add this file/content manually if using service account file
+        sync: false
     autoDeploy: true
 
   # Frontend Static Site
   - type: web
     name: academiaai-frontend
     env: static
+    rootDir: client
     buildCommand: npm install && npm run build
-    staticPublishPath: ./client/dist
+    staticPublishPath: ./dist
     envVars:
       - key: VITE_API_URL
         fromService:
